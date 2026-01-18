@@ -55,7 +55,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	db, err := sql.Open("sqlite3", "./database1.db")
+	db, err := sql.Open("sqlite3", p.GetString("db", "database.db"))
 	if err != nil {
 		log.Fatal(err)
 	}

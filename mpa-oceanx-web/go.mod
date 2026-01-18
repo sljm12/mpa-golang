@@ -1,4 +1,4 @@
-module sljm12.github.com/mpa-webservice
+module sljm12.github.com/mpa-oceanx-webdownload
 
 go 1.22.2
 

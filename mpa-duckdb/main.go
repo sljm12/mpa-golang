@@ -10,6 +10,30 @@ import (
 )
 
 func main() {
+
+	var geojson_sql = `
+	WITH features AS (
+        SELECT {
+            'type': 'Feature',
+            'geometry': ST_AsGeoJSON(ST_Point(longitudeDegrees, latitudeDegrees))::JSON,
+            'properties': {
+                'imo': imoNumber,
+                'mmsi': mmsiNumber,
+                'vesselName': vesselName,
+                'sanction': CASE WHEN v.imo IS NOT NULL THEN true ELSE false END
+            }
+        } AS feature
+        FROM mpa.ais_data m 
+        LEFT JOIN vessel_sanction_imo_mmsi v ON m.imoNumber = v.imo 
+        WHERE m.timeStamp::timestamp > (SELECT max(timeStamp::timestamp) - INTERVAL '5 minutes' FROM mpa.ais_data)
+    )
+    SELECT JSON_OBJECT(
+        'type', 'FeatureCollection',
+        'features', JSON_GROUP_ARRAY(feature)
+    )::TEXT -- Cast to text for a raw dump
+    FROM features;
+	`
+
 	db, err := sql.Open("duckdb", "duckdb.db")
 	if err != nil {
 		log.Fatal(err)
@@ -17,6 +41,16 @@ func main() {
 	defer db.Close()
 
 	_, err = db.Exec(`ATTACH 'D:\workspace\mpa-golang\mpa-oceanx-web\database1.db' as mpa (TYPE SQLITE, READ_ONLY)`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`INSTALL SPATIAL`)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = db.Exec(`LOAD SPATIAL`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +85,7 @@ func main() {
 	} else if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("mpa.ais_data %d", num)
+	fmt.Printf("mpa.ais_data %d\n", num)
 
 	row1 := db.QueryRow(`SELECT  count(*) FROM vessel_sanction_imo_mmsi;`)
 
@@ -62,5 +96,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Vessel Sanction %d", num)
+	fmt.Printf("Vessel Sanction %d\n", num)
+	var geojson_str string
+
+	row2 := db.QueryRow(geojson_sql)
+	err = row2.Scan(&geojson_str)
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Println("no rows")
+	} else if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(geojson_str)
 }
